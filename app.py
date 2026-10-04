@@ -16,23 +16,24 @@ st.set_page_config(
 
 
 # ============================================================
-# DATABASE CONNECTION
+# DATABASE
 # ============================================================
+
+DB_NAME = "construction.db"
+
 
 def get_connection():
-    return sqlite3.connect("construction.db")
+    return sqlite3.connect(DB_NAME)
 
-
-# ============================================================
-# INITIALIZE DATABASE
-# ============================================================
 
 def initialize_database():
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    # ---------------- MATERIALS TABLE ----------------
+    # --------------------------------------------------------
+    # MATERIALS TABLE
+    # --------------------------------------------------------
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS materials (
@@ -46,7 +47,9 @@ def initialize_database():
     )
     """)
 
-    # ---------------- LABOR TABLE ----------------
+    # --------------------------------------------------------
+    # LABOR TABLE
+    # --------------------------------------------------------
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS labor (
@@ -60,7 +63,10 @@ def initialize_database():
 
     conn.commit()
 
-    # Add sample materials only when database is empty
+    # --------------------------------------------------------
+    # INSERT SAMPLE MATERIALS
+    # ONLY IF TABLE IS EMPTY
+    # --------------------------------------------------------
 
     cursor.execute("SELECT COUNT(*) FROM materials")
     material_count = cursor.fetchone()[0]
@@ -107,6 +113,14 @@ def initialize_database():
                 "pieces",
                 35,
                 "Modern Tiles"
+            ),
+            (
+                "Concrete",
+                "Structural",
+                50,
+                "cubic meters",
+                5500,
+                "Premium Builders"
             )
         ]
 
@@ -123,7 +137,10 @@ def initialize_database():
         VALUES (?, ?, ?, ?, ?, ?)
         """, materials)
 
-    # Add sample labor only when database is empty
+    # --------------------------------------------------------
+    # INSERT SAMPLE LABOR
+    # ONLY IF TABLE IS EMPTY
+    # --------------------------------------------------------
 
     cursor.execute("SELECT COUNT(*) FROM labor")
     labor_count = cursor.fetchone()[0]
@@ -221,45 +238,19 @@ df_labor = load_labor()
 
 
 # ============================================================
-# COST CALCULATIONS
+# CURRENT INVENTORY COST
 # ============================================================
 
-total_material_cost = df_materials["total_cost"].sum()
+inventory_material_cost = df_materials["total_cost"].sum()
 
-total_labor_cost = df_labor["total_cost"].sum()
-
-total_project_cost = (
-    total_material_cost +
-    total_labor_cost
-)
-
-approved_budget = 400000
-
-remaining_budget = (
-    approved_budget -
-    total_project_cost
-)
+labor_database_cost = df_labor["total_cost"].sum()
 
 
 # ============================================================
-# TITLE
+# SIDEBAR
 # ============================================================
 
-st.title(
-    "🏗️ Construction Material Inventory & Cost Estimator"
-)
-
-st.write(
-    "Manage construction materials, calculate labor costs, "
-    "estimate project expenses and monitor the project budget."
-)
-
-
-# ============================================================
-# SIDEBAR NAVIGATION
-# ============================================================
-
-st.sidebar.title("📌 Navigation")
+st.sidebar.title("🏗️ Construction Estimator")
 
 page = st.sidebar.radio(
     "Select Section",
@@ -279,35 +270,48 @@ page = st.sidebar.radio(
 
 if page == "📊 Dashboard":
 
-    st.header("📊 Project Dashboard")
-
-    # ---------------- METRICS ----------------
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric(
-        "Material Cost",
-        f"₹{total_material_cost:,.0f}"
+    st.title(
+        "🏗️ Construction Material Inventory & Cost Estimator"
     )
 
-    col2.metric(
-        "Labor Cost",
-        f"₹{total_labor_cost:,.0f}"
-    )
-
-    col3.metric(
-        "Total Project Cost",
-        f"₹{total_project_cost:,.0f}"
-    )
-
-    col4.metric(
-        "Remaining Budget",
-        f"₹{remaining_budget:,.0f}"
+    st.write(
+        "Manage materials, labor and estimate the complete "
+        "construction project cost."
     )
 
     st.divider()
 
-    # ---------------- MATERIAL CATEGORY CHART ----------------
+    # --------------------------------------------------------
+    # METRICS
+    # --------------------------------------------------------
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "Materials",
+        len(df_materials)
+    )
+
+    col2.metric(
+        "Material Inventory Value",
+        f"₹{inventory_material_cost:,.0f}"
+    )
+
+    col3.metric(
+        "Labor Records",
+        len(df_labor)
+    )
+
+    col4.metric(
+        "Labor Cost",
+        f"₹{labor_database_cost:,.0f}"
+    )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # MATERIAL COST CHART
+    # --------------------------------------------------------
 
     st.subheader("📊 Material Cost by Category")
 
@@ -333,26 +337,28 @@ if page == "📊 Dashboard":
         use_container_width=True
     )
 
-    # ---------------- BUDGET PIE CHART ----------------
+    # --------------------------------------------------------
+    # SUPPLIER CHART
+    # --------------------------------------------------------
 
-    st.subheader("💰 Project Cost Distribution")
+    st.subheader("🏢 Material Value by Supplier")
 
-    budget_data = pd.DataFrame({
-        "Cost Type": [
-            "Materials",
-            "Labor"
-        ],
-        "Amount": [
-            total_material_cost,
-            total_labor_cost
-        ]
-    })
+    supplier_costs = (
+        df_materials
+        .groupby("supplier", as_index=False)["total_cost"]
+        .sum()
+        .sort_values("total_cost", ascending=False)
+    )
 
-    fig2 = px.pie(
-        budget_data,
-        names="Cost Type",
-        values="Amount",
-        title="Material vs Labor Cost"
+    fig2 = px.bar(
+        supplier_costs,
+        x="supplier",
+        y="total_cost",
+        title="Material Value by Supplier",
+        labels={
+            "supplier": "Supplier",
+            "total_cost": "Value (₹)"
+        }
     )
 
     st.plotly_chart(
@@ -367,11 +373,13 @@ if page == "📊 Dashboard":
 
 elif page == "🧱 Materials":
 
-    st.header("🧱 Material Inventory Management")
+    st.title("🧱 Material Inventory")
 
-    # ---------------- SHOW MATERIALS ----------------
+    # --------------------------------------------------------
+    # MATERIAL TABLE
+    # --------------------------------------------------------
 
-    st.subheader("Current Materials")
+    st.subheader("Current Material Inventory")
 
     st.dataframe(
         df_materials,
@@ -387,7 +395,7 @@ elif page == "🧱 Materials":
 
     st.subheader("➕ Add New Material")
 
-    with st.form("add_material_form"):
+    with st.form("add_material"):
 
         col1, col2 = st.columns(2)
 
@@ -402,7 +410,7 @@ elif page == "🧱 Materials":
             )
 
             quantity = st.number_input(
-                "Quantity",
+                "Available Quantity",
                 min_value=0.0,
                 value=1.0
             )
@@ -411,7 +419,7 @@ elif page == "🧱 Materials":
 
             unit = st.text_input(
                 "Unit",
-                placeholder="bags / kg / pieces / tons"
+                placeholder="bags, kg, pieces, tons"
             )
 
             unit_price = st.number_input(
@@ -424,11 +432,11 @@ elif page == "🧱 Materials":
                 "Supplier"
             )
 
-        add_button = st.form_submit_button(
+        submit = st.form_submit_button(
             "➕ Add Material"
         )
 
-        if add_button:
+        if submit:
 
             if (
                 material_name
@@ -484,7 +492,7 @@ elif page == "🧱 Materials":
 
     if len(df_materials) > 0:
 
-        material_options = dict(
+        material_dict = dict(
             zip(
                 df_materials["material_id"],
                 df_materials["material_name"]
@@ -493,15 +501,15 @@ elif page == "🧱 Materials":
 
         selected_id = st.selectbox(
             "Select Material",
-            options=list(material_options.keys()),
-            format_func=lambda x: material_options[x]
+            list(material_dict.keys()),
+            format_func=lambda x: material_dict[x]
         )
 
-        selected_material = df_materials[
+        selected = df_materials[
             df_materials["material_id"] == selected_id
         ].iloc[0]
 
-        with st.form("edit_material_form"):
+        with st.form("edit_material"):
 
             col1, col2 = st.columns(2)
 
@@ -509,43 +517,43 @@ elif page == "🧱 Materials":
 
                 edit_name = st.text_input(
                     "Material Name",
-                    value=selected_material["material_name"]
+                    value=selected["material_name"]
                 )
 
                 edit_category = st.text_input(
                     "Category",
-                    value=selected_material["category"]
+                    value=selected["category"]
                 )
 
                 edit_quantity = st.number_input(
                     "Quantity",
                     min_value=0.0,
-                    value=float(selected_material["quantity"])
+                    value=float(selected["quantity"])
                 )
 
             with col2:
 
                 edit_unit = st.text_input(
                     "Unit",
-                    value=selected_material["unit"]
+                    value=selected["unit"]
                 )
 
                 edit_price = st.number_input(
-                    "Unit Price (₹)",
+                    "Unit Price",
                     min_value=0.0,
-                    value=float(selected_material["unit_price"])
+                    value=float(selected["unit_price"])
                 )
 
                 edit_supplier = st.text_input(
                     "Supplier",
-                    value=selected_material["supplier"]
+                    value=selected["supplier"]
                 )
 
-            update_button = st.form_submit_button(
+            update = st.form_submit_button(
                 "💾 Update Material"
             )
 
-            if update_button:
+            if update:
 
                 conn = get_connection()
 
@@ -588,7 +596,7 @@ elif page == "🧱 Materials":
 
     if len(df_materials) > 0:
 
-        delete_options = dict(
+        delete_dict = dict(
             zip(
                 df_materials["material_id"],
                 df_materials["material_name"]
@@ -597,13 +605,14 @@ elif page == "🧱 Materials":
 
         delete_id = st.selectbox(
             "Select Material to Delete",
-            options=list(delete_options.keys()),
-            format_func=lambda x: delete_options[x],
+            list(delete_dict.keys()),
+            format_func=lambda x: delete_dict[x],
             key="delete_material"
         )
 
         if st.button(
-            "🗑️ Delete Selected Material"
+            "🗑️ Delete Material",
+            type="secondary"
         ):
 
             conn = get_connection()
@@ -624,153 +633,451 @@ elif page == "🧱 Materials":
 
 
 # ============================================================
-# COST ESTIMATOR
+# REALISTIC COST ESTIMATOR
 # ============================================================
 
 elif page == "🧮 Cost Estimator":
 
-    st.header("🧮 Construction Cost Estimator")
+    st.title("🧮 Construction Cost Estimator")
 
     st.write(
-        "Enter the required quantities and costs to estimate "
-        "the total construction expense."
+        "Create a project estimate using multiple materials, "
+        "labor, transportation, equipment, other expenses "
+        "and contingency."
     )
 
     st.divider()
 
-    # ---------------- MATERIAL ESTIMATE ----------------
+    # ========================================================
+    # PROJECT INFORMATION
+    # ========================================================
 
-    st.subheader("🧱 Material Estimate")
+    st.subheader("🏗️ Project Information")
 
-    material_names = df_materials["material_name"].tolist()
+    col1, col2, col3 = st.columns(3)
 
-    if material_names:
+    with col1:
 
-        selected_material_name = st.selectbox(
-            "Select Material",
-            material_names
+        project_name = st.text_input(
+            "Project Name",
+            placeholder="Example: Residential Building"
         )
 
-        selected_material = df_materials[
+    with col2:
+
+        project_area = st.number_input(
+            "Project Area (sq.ft)",
+            min_value=0.0,
+            value=1000.0
+        )
+
+    with col3:
+
+        approved_budget = st.number_input(
+            "Approved Budget (₹)",
+            min_value=0.0,
+            value=400000.0
+        )
+
+    st.divider()
+
+    # ========================================================
+    # MULTIPLE MATERIAL ESTIMATION
+    # ========================================================
+
+    st.subheader("🧱 Material Requirements")
+
+    material_names = df_materials[
+        "material_name"
+    ].tolist()
+
+    # Session state for selected materials
+
+    if "estimate_materials" not in st.session_state:
+
+        st.session_state.estimate_materials = []
+
+    # --------------------------------------------------------
+    # ADD MATERIAL TO ESTIMATE
+    # --------------------------------------------------------
+
+    col1, col2, col3 = st.columns([2, 1, 1])
+
+    with col1:
+
+        if material_names:
+
+            selected_material_name = st.selectbox(
+                "Select Material",
+                material_names,
+                key="estimate_material_select"
+            )
+
+    with col2:
+
+        selected_quantity = st.number_input(
+            "Required Quantity",
+            min_value=0.0,
+            value=1.0,
+            key="estimate_quantity"
+        )
+
+    with col3:
+
+        st.write("")
+        st.write("")
+
+        add_estimate_material = st.button(
+            "➕ Add to Estimate"
+        )
+
+    if add_estimate_material:
+
+        selected_row = df_materials[
             df_materials["material_name"]
             == selected_material_name
         ].iloc[0]
 
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-
-            required_quantity = st.number_input(
-                f"Required Quantity ({selected_material['unit']})",
-                min_value=0.0,
-                value=float(selected_material["quantity"])
+        material_record = {
+            "Material": selected_material_name,
+            "Quantity": selected_quantity,
+            "Unit": selected_row["unit"],
+            "Unit Price": float(
+                selected_row["unit_price"]
+            ),
+            "Cost": (
+                selected_quantity
+                * float(selected_row["unit_price"])
             )
+        }
 
-        with col2:
-
-            estimate_unit_price = st.number_input(
-                "Unit Price (₹)",
-                min_value=0.0,
-                value=float(selected_material["unit_price"])
-            )
-
-        with col3:
-
-            material_estimate = (
-                required_quantity *
-                estimate_unit_price
-            )
-
-            st.metric(
-                "Material Cost",
-                f"₹{material_estimate:,.2f}"
-            )
-
-        st.divider()
-
-        # ---------------- LABOR ESTIMATE ----------------
-
-        st.subheader("👷 Labor Estimate")
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-
-            number_of_workers = st.number_input(
-                "Number of Workers",
-                min_value=0,
-                value=1
-            )
-
-        with col2:
-
-            number_of_days = st.number_input(
-                "Number of Days",
-                min_value=0,
-                value=1
-            )
-
-        with col3:
-
-            daily_wage = st.number_input(
-                "Daily Wage per Worker (₹)",
-                min_value=0.0,
-                value=800.0
-            )
-
-        labor_estimate = (
-            number_of_workers
-            * number_of_days
-            * daily_wage
+        st.session_state.estimate_materials.append(
+            material_record
         )
 
-        st.metric(
-            "Labor Cost",
-            f"₹{labor_estimate:,.2f}"
+        st.success(
+            f"{selected_material_name} added to estimate."
         )
 
-        st.divider()
+    # --------------------------------------------------------
+    # SHOW SELECTED MATERIALS
+    # --------------------------------------------------------
 
-        # ---------------- OTHER EXPENSES ----------------
+    if st.session_state.estimate_materials:
 
-        st.subheader("📦 Other Expenses")
+        estimate_material_df = pd.DataFrame(
+            st.session_state.estimate_materials
+        )
 
-        other_expenses = st.number_input(
-            "Other Expenses (₹)",
+        st.dataframe(
+            estimate_material_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        material_estimate_total = (
+            estimate_material_df["Cost"].sum()
+        )
+
+    else:
+
+        material_estimate_total = 0
+
+        st.info(
+            "Add materials to create your project estimate."
+        )
+
+    st.divider()
+
+    # ========================================================
+    # LABOR ESTIMATION
+    # ========================================================
+
+    st.subheader("👷 Labor Estimate")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        estimate_workers = st.number_input(
+            "Number of Workers",
+            min_value=0,
+            value=5
+        )
+
+    with col2:
+
+        estimate_days = st.number_input(
+            "Working Days",
+            min_value=0,
+            value=20
+        )
+
+    with col3:
+
+        estimate_daily_wage = st.number_input(
+            "Daily Wage / Worker (₹)",
+            min_value=0.0,
+            value=800.0
+        )
+
+    labor_estimate_total = (
+        estimate_workers
+        * estimate_days
+        * estimate_daily_wage
+    )
+
+    st.metric(
+        "Estimated Labor Cost",
+        f"₹{labor_estimate_total:,.2f}"
+    )
+
+    st.divider()
+
+    # ========================================================
+    # OTHER PROJECT EXPENSES
+    # ========================================================
+
+    st.subheader("📦 Other Project Expenses")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        transportation_cost = st.number_input(
+            "🚚 Transportation Cost (₹)",
             min_value=0.0,
             value=0.0
         )
 
-        # ---------------- FINAL ESTIMATE ----------------
+    with col2:
 
-        estimated_total = (
-            material_estimate
-            + labor_estimate
-            + other_expenses
+        equipment_cost = st.number_input(
+            "🏗️ Equipment Cost (₹)",
+            min_value=0.0,
+            value=0.0
         )
 
-        st.divider()
+    with col3:
 
-        st.subheader("💰 Estimated Project Cost")
+        other_expenses = st.number_input(
+            "📦 Other Expenses (₹)",
+            min_value=0.0,
+            value=0.0
+        )
+
+    other_cost_total = (
+        transportation_cost
+        + equipment_cost
+        + other_expenses
+    )
+
+    st.divider()
+
+    # ========================================================
+    # CONTINGENCY
+    # ========================================================
+
+    st.subheader("⚠️ Contingency")
+
+    contingency_percentage = st.number_input(
+        "Contingency Percentage (%)",
+        min_value=0.0,
+        max_value=50.0,
+        value=5.0
+    )
+
+    subtotal = (
+        material_estimate_total
+        + labor_estimate_total
+        + other_cost_total
+    )
+
+    contingency_amount = (
+        subtotal
+        * contingency_percentage
+        / 100
+    )
+
+    # ========================================================
+    # FINAL ESTIMATE
+    # ========================================================
+
+    final_estimate = (
+        subtotal
+        + contingency_amount
+    )
+
+    st.divider()
+
+    st.subheader("💰 Final Project Estimate")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
 
         st.metric(
-            "Total Estimated Cost",
-            f"₹{estimated_total:,.2f}"
+            "Material Cost",
+            f"₹{material_estimate_total:,.2f}"
         )
 
-        if estimated_total <= approved_budget:
+    with col2:
 
-            st.success(
-                f"Within budget! "
-                f"Remaining: ₹{approved_budget - estimated_total:,.2f}"
-            )
+        st.metric(
+            "Labor Cost",
+            f"₹{labor_estimate_total:,.2f}"
+        )
 
-        else:
+    with col3:
 
-            st.error(
-                f"Over budget by "
-                f"₹{estimated_total - approved_budget:,.2f}"
-            )
+        st.metric(
+            "Other Costs",
+            f"₹{other_cost_total:,.2f}"
+        )
+
+    col4, col5, col6 = st.columns(3)
+
+    with col4:
+
+        st.metric(
+            "Subtotal",
+            f"₹{subtotal:,.2f}"
+        )
+
+    with col5:
+
+        st.metric(
+            "Contingency",
+            f"₹{contingency_amount:,.2f}"
+        )
+
+    with col6:
+
+        st.metric(
+            "TOTAL ESTIMATE",
+            f"₹{final_estimate:,.2f}"
+        )
+
+    st.divider()
+
+    # ========================================================
+    # BUDGET COMPARISON
+    # ========================================================
+
+    st.subheader("💰 Budget Comparison")
+
+    budget_difference = (
+        approved_budget
+        - final_estimate
+    )
+
+    if final_estimate <= approved_budget:
+
+        st.success(
+            f"✅ Project is within budget. "
+            f"Remaining budget: "
+            f"₹{budget_difference:,.2f}"
+        )
+
+    else:
+
+        st.error(
+            f"⚠️ Project is over budget by "
+            f"₹{abs(budget_difference):,.2f}"
+        )
+
+    # ========================================================
+    # COST BREAKDOWN CHART
+    # ========================================================
+
+    cost_breakdown = pd.DataFrame({
+        "Cost Type": [
+            "Materials",
+            "Labor",
+            "Other Expenses",
+            "Contingency"
+        ],
+        "Amount": [
+            material_estimate_total,
+            labor_estimate_total,
+            other_cost_total,
+            contingency_amount
+        ]
+    })
+
+    fig = px.pie(
+        cost_breakdown,
+        names="Cost Type",
+        values="Amount",
+        title="Complete Project Cost Breakdown"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # ========================================================
+    # ESTIMATE TABLE
+    # ========================================================
+
+    st.subheader("📋 Estimate Summary")
+
+    summary = pd.DataFrame({
+        "Cost Type": [
+            "Materials",
+            "Labor",
+            "Transportation",
+            "Equipment",
+            "Other Expenses",
+            "Subtotal",
+            "Contingency",
+            "Final Estimate"
+        ],
+        "Amount (₹)": [
+            material_estimate_total,
+            labor_estimate_total,
+            transportation_cost,
+            equipment_cost,
+            other_expenses,
+            subtotal,
+            contingency_amount,
+            final_estimate
+        ]
+    })
+
+    st.dataframe(
+        summary,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # ========================================================
+    # DOWNLOAD ESTIMATE
+    # ========================================================
+
+    csv_data = summary.to_csv(
+        index=False
+    )
+
+    st.download_button(
+        label="📥 Download Estimate CSV",
+        data=csv_data,
+        file_name="construction_project_estimate.csv",
+        mime="text/csv"
+    )
+
+    # --------------------------------------------------------
+    # CLEAR ESTIMATE
+    # --------------------------------------------------------
+
+    if st.button(
+        "🗑️ Clear Current Estimate"
+    ):
+
+        st.session_state.estimate_materials = []
+
+        st.rerun()
 
 
 # ============================================================
@@ -779,11 +1086,9 @@ elif page == "🧮 Cost Estimator":
 
 elif page == "👷 Labor":
 
-    st.header("👷 Labor Management")
+    st.title("👷 Labor Management")
 
-    # ---------------- LABOR TABLE ----------------
-
-    st.subheader("Current Labor")
+    st.subheader("Current Labor Records")
 
     st.dataframe(
         df_labor,
@@ -793,7 +1098,7 @@ elif page == "👷 Labor":
 
     st.metric(
         "Total Labor Cost",
-        f"₹{total_labor_cost:,.2f}"
+        f"₹{labor_database_cost:,.2f}"
     )
 
     st.divider()
@@ -804,7 +1109,7 @@ elif page == "👷 Labor":
 
     st.subheader("➕ Add Labor")
 
-    with st.form("labor_form"):
+    with st.form("add_labor"):
 
         col1, col2 = st.columns(2)
 
@@ -824,22 +1129,22 @@ elif page == "👷 Labor":
         with col2:
 
             days = st.number_input(
-                "Number of Days",
+                "Working Days",
                 min_value=1,
                 value=1
             )
 
-            wage = st.number_input(
+            daily_wage = st.number_input(
                 "Daily Wage per Worker (₹)",
                 min_value=0.0,
                 value=800.0
             )
 
-        add_labor_button = st.form_submit_button(
+        add_labor = st.form_submit_button(
             "➕ Add Labor"
         )
 
-        if add_labor_button:
+        if add_labor:
 
             if worker_type:
 
@@ -858,7 +1163,7 @@ elif page == "👷 Labor":
                     worker_type,
                     workers,
                     days,
-                    wage
+                    daily_wage
                 ))
 
                 conn.commit()
@@ -873,7 +1178,7 @@ elif page == "👷 Labor":
             else:
 
                 st.error(
-                    "Please enter worker type."
+                    "Enter worker type."
                 )
 
     st.divider()
@@ -882,21 +1187,22 @@ elif page == "👷 Labor":
     # DELETE LABOR
     # ========================================================
 
-    st.subheader("🗑️ Delete Labor")
+    st.subheader("🗑️ Delete Labor Record")
 
     if len(df_labor) > 0:
 
-        labor_options = dict(
+        labor_dict = dict(
             zip(
                 df_labor["labor_id"],
                 df_labor["worker_type"]
             )
         )
 
-        delete_labor_id = st.selectbox(
+        delete_labor = st.selectbox(
             "Select Labor Record",
-            options=list(labor_options.keys()),
-            format_func=lambda x: labor_options[x]
+            list(labor_dict.keys()),
+            format_func=lambda x: labor_dict[x],
+            key="delete_labor"
         )
 
         if st.button(
@@ -907,7 +1213,7 @@ elif page == "👷 Labor":
 
             conn.execute(
                 "DELETE FROM labor WHERE labor_id = ?",
-                (delete_labor_id,)
+                (delete_labor,)
             )
 
             conn.commit()
@@ -926,27 +1232,23 @@ elif page == "👷 Labor":
 
 elif page == "💰 Budget Analysis":
 
-    st.header("💰 Budget Analysis")
-
-    # ---------------- BUDGET INPUT ----------------
+    st.title("💰 Budget Analysis")
 
     budget = st.number_input(
         "Approved Project Budget (₹)",
         min_value=0.0,
-        value=float(approved_budget)
+        value=400000.0
     )
 
-    estimated_cost = (
-        total_material_cost +
-        total_labor_cost
+    current_project_cost = (
+        inventory_material_cost
+        + labor_database_cost
     )
 
     difference = (
-        budget -
-        estimated_cost
+        budget
+        - current_project_cost
     )
-
-    st.divider()
 
     col1, col2, col3 = st.columns(3)
 
@@ -956,87 +1258,48 @@ elif page == "💰 Budget Analysis":
     )
 
     col2.metric(
-        "Estimated Cost",
-        f"₹{estimated_cost:,.2f}"
+        "Current Project Cost",
+        f"₹{current_project_cost:,.2f}"
     )
 
     col3.metric(
-        "Difference",
+        "Remaining Budget",
         f"₹{difference:,.2f}"
     )
 
-    if estimated_cost <= budget:
+    if current_project_cost <= budget:
 
         st.success(
-            "✅ Project is within the approved budget."
+            "✅ Current project cost is within the budget."
         )
 
     else:
 
         st.error(
-            "⚠️ Project is over the approved budget."
+            "⚠️ Current project cost is over the budget."
         )
 
     st.divider()
 
-    # ---------------- BUDGET CHART ----------------
-
-    budget_comparison = pd.DataFrame({
+    budget_data = pd.DataFrame({
         "Category": [
             "Approved Budget",
-            "Estimated Cost"
+            "Current Project Cost"
         ],
         "Amount": [
             budget,
-            estimated_cost
+            current_project_cost
         ]
     })
 
     fig = px.bar(
-        budget_comparison,
+        budget_data,
         x="Category",
         y="Amount",
-        title="Approved Budget vs Estimated Cost",
-        labels={
-            "Category": "Type",
-            "Amount": "Amount (₹)"
-        }
+        title="Budget vs Current Project Cost"
     )
 
     st.plotly_chart(
         fig,
-        use_container_width=True
-    )
-
-    # ---------------- COST BREAKDOWN ----------------
-
-    st.subheader("📊 Cost Breakdown")
-
-    cost_breakdown = pd.DataFrame({
-        "Cost Type": [
-            "Materials",
-            "Labor"
-        ],
-        "Amount": [
-            total_material_cost,
-            total_labor_cost
-        ]
-    })
-
-    st.dataframe(
-        cost_breakdown,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    fig2 = px.pie(
-        cost_breakdown,
-        names="Cost Type",
-        values="Amount",
-        title="Project Cost Distribution"
-    )
-
-    st.plotly_chart(
-        fig2,
         use_container_width=True
     )
